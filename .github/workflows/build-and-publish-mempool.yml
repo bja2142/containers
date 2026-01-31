@@ -14,6 +14,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Cache Docker layers
+        uses: actions/cache@v2
+        with:
+        path: /tmp/.buildx-cache
+        key: ${{ runner.os }}-buildx-${{ github.sha }}
+        restore-keys: |
+        ${{ runner.os }}-buildx-
+
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -27,7 +35,7 @@ jobs:
           context: bitcoin-mempool
           push: true
           tags: ghcr.io/${{ github.actor }}/bitcoin-mempool:latest 
-          cache-from: type=registry,ref=ghcr.io/${{ github.actor }}/bitcoin-mempool:latest 
-          cache-to: type=registry,ref=ghcr.io/${{ github.actor }}/bitcoin-mempool:latest ,mode=max
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache
 
   
