@@ -1,4 +1,4 @@
-name: Build and Push Mepool
+name: Build and Push Mempool
 
 on:
   workflow_dispatch:
