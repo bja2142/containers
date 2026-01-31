@@ -22,9 +22,12 @@ jobs:
           password: ${{ secrets.CR_PAT }} 
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: bitcoin-mempool
           push: true
           tags: ghcr.io/${{ github.actor }}/bitcoin-mempool:latest 
+          cache-from: type=registry,ref=ghcr.io/${{ github.actor }}/bitcoin-mempool:latest 
+          cache-to: type=registry,ref=ghcr.io/${{ github.actor }}/bitcoin-mempool:latest ,mode=max
+
   

@@ -10,19 +10,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nginx \
     supervisor \
     make g++ python3 \
-    clang cmake pkg-config libssl-dev \
     npm  && \
     curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-    && apt-get install -y nodejs && \
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-    | sh -s -- -y --default-toolchain stable \
-    && apt-get remove cmake pkg-config g++ make -y \
-    && apt-get autoremove -y \
+    && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 # --- Node.js LTS (v18+ is fine; Mempool requires v16+) ---
 # (Debian Bookworm ships a recent Node; if you prefer NodeSource, swap in their repo)
 
+
+# --- add Rust toolchain & build deps ---
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    clang cmake pkg-config libssl-dev \
+ && rm -rf /var/lib/apt/lists/*
+
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+    | sh -s -- -y --default-toolchain stable
 ENV PATH="/root/.cargo/bin:/home/user/.cargo/bin:${PATH}"
 
 
@@ -32,6 +36,10 @@ ENV PATH="/root/.cargo/bin:/home/user/.cargo/bin:${PATH}"
 # (Mempool's official docker/compose is multi-container; we're collapsing it.)  [1](https://github.com/mempool/mempool/blob/master/docker/README.md)
 RUN git clone --depth 1 https://github.com/mempool/mempool.git /opt/mempool
 WORKDIR /opt/mempool
+
+
+
+
 
 # --- Build backend ---
 WORKDIR /opt/mempool/backend
