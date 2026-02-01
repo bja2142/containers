@@ -38,7 +38,7 @@ jobs:
           push: true
           platforms: linux/amd64
           tags: |
-            ghcr.io/${{ toLower(github.repository_owner) }}/bitcoin-lab:${{ github.sha }}-amd64
+            ghcr.io/${{ github.repository_owner }}/bitcoin-lab:${{ github.sha }}-amd64
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false
@@ -79,7 +79,7 @@ jobs:
           push: true
           platforms: linux/arm64
           tags: |
-            ghcr.io/${{ toLower(github.repository_owner) }}/bitcoin-lab:${{ github.sha }}-arm64
+            ghcr.io/${{ github.repository_owner }}/bitcoin-lab:${{ github.sha }}-arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false
