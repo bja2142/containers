@@ -5,46 +5,115 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-publish-bitcoin:
+  build-amd64:
+    name: Build (amd64)
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      # Optional: free some disk space on the runner
+      # Optional: free some disk on the hosted runner
       - name: Docker prune
         run: docker system prune -af || true
 
-      # Enable emulation to build arm64 on amd64 runner
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
+      - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
         with:
           install: true
 
-      - name: Log in to GitHub Container Registry
+      - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push multi-arch image
+      - name: Build & push (amd64)
         uses: docker/build-push-action@v6
         with:
           context: ./bitcoin-lab
           push: true
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           tags: |
-            ghcr.io/${{ github.repository_owner }}/bitcoin-lab:latest
-            ghcr.io/${{ github.repository_owner }}/bitcoin-lab:${{ github.sha }}
+            ghcr.io/${{ toLower(github.repository_owner) }}/bitcoin-lab:${{ github.sha }}-amd64
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false
           sbom: false
+
+  build-arm64:
+    name: Build (arm64)
+    # Public repos: use GitHub's native ARM64 runners:
+    runs-on: ubuntu-24.04-arm
+    # Private repos: replace with your org's ARM Larger Runner label, e.g.:
+    # runs-on: my-org-arm64-large
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Docker prune
+        run: docker system prune -af || true
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          install: true
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push (arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./bitcoin-lab
+          push: true
+          platforms: linux/arm64
+          tags: |
+            ghcr.io/${{ toLower(github.repository_owner) }}/bitcoin-lab:${{ github.sha }}-arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false
+
+  publish-manifest:
+    name: Publish manifest (latest + SHA)
+    needs: [build-amd64, build-arm64]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create multi-arch manifest :latest
+        run: |
+          OWNER_LC="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          IMAGE="ghcr.io/${OWNER_LC}/bitcoin-lab"
+          docker buildx imagetools create \
+            --tag "${IMAGE}:latest" \
+            "${IMAGE}:${{ github.sha }}-amd64" \
+            "${IMAGE}:${{ github.sha }}-arm64"
+
+      - name: Create multi-arch manifest :${{ github.sha }}
+        run: |
+          OWNER_LC="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          IMAGE="ghcr.io/${OWNER_LC}/bitcoin-lab"
+          docker buildx imagetools create \
+            --tag "${IMAGE}:${{ github.sha }}" \
+            "${IMAGE}:${{ github.sha }}-amd64" \
+            "${IMAGE}:${{ github.sha }}-arm64"
