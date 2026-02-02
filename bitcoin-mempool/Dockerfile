@@ -55,7 +55,13 @@ RUN sed -i "s|document.location.port + '{network}|document.location.port + docum
     sed -i "s|import { HttpClient|import { PlatformLocation } from '@angular/common';\nimport { HttpClient|" src/app/services/api.service.ts && \
     sed -i "s|private httpClient: HttpClient,|private httpClient: HttpClient, private platformLocation: PlatformLocation,|" src/app/services/api.service.ts && \
     sed -i "s|this.apiBasePath = '';| this.apiBasePath = this.platformLocation.getBaseHrefFromDOM().replace(new RegExp('/\$'), '');|" src/app/services/api.service.ts && \
-    grep -rl "/resources/mining-pools/" src | xargs sed -i 's|/resources/mining-pools/|resources/mining-pools/|g'
+    sed -i "s|this.stateService.env.ROOT_NETWORK ? '/' + network : '';|this.stateService.env.ROOT_NETWORK ? '/' + network : ''; this.apiBasePath = this.platformLocation.getBaseHrefFromDOM().replace(new RegExp('/\$'), '') + this.apiBasePath ;|" src/app/services/api.service.ts && \
+    grep -rl "/resources/mining-pools/" src | xargs sed -i 's|/resources/mining-pools/|resources/mining-pools/|g' && \
+    sed -i "s|import { HttpClient|import { PlatformLocation } from '@angular/common';\nimport { HttpClient|" src/app/services/electrs-api.service.ts && \
+    sed -i "s|private httpClient: HttpClient,|private httpClient: HttpClient, private platformLocation: PlatformLocation,|" src/app/services/electrs-api.service.ts && \
+    sed -i "s|this.apiBasePath = '';| this.apiBasePath = this.platformLocation.getBaseHrefFromDOM().replace(new RegExp('/\$'), '');|" src/app/services/electrs-api.service.ts && \
+    sed -i "s|this.apiBasePath = network && network !== this.stateService.env.ROOT_NETWORK ? '/' + network : '';|this.apiBasePath = network \&\& network !== this.stateService.env.ROOT_NETWORK ? '/' + network : ''; this.apiBasePath = this.platformLocation.getBaseHrefFromDOM().replace(new RegExp('/\$'), '') + this.apiBasePath ;|" src/app/services/electrs-api.service.ts
+
 
 RUN npm ci && npm run build -- --base-href './'
 
