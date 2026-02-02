@@ -37,6 +37,8 @@ ENV PATH="/root/.cargo/bin:/home/user/.cargo/bin:${PATH}"
 RUN git clone --depth 1 https://github.com/mempool/mempool.git /opt/mempool
 WORKDIR /opt/mempool
 
+# if it starts breaking, consider pinning to this commit: 20e4979628bca4ca5a3b74c4407a0ff8e3ad71a6
+
 
 
 
@@ -48,7 +50,14 @@ RUN npm run preinstall && npm ci && npm run build
 
 # --- Build frontend (static files) ---
 WORKDIR /opt/mempool/frontend
-RUN npm ci && npm run build
+#fix for proxy
+RUN sed -i "s|document.location.port + '{network}|document.location.port + document.location.pathname.replace(new RegExp('/\$'), '') + '{network}|" src/app/services/websocket.service.ts && \
+    sed -i "s|import { HttpClient|import { PlatformLocation } from '@angular/common';\nimport { HttpClient|" src/app/services/api.service.ts && \
+    sed -i "s|private httpClient: HttpClient,|private httpClient: HttpClient, private platformLocation: PlatformLocation,|" src/app/services/api.service.ts && \
+    sed -i "s|this.apiBasePath = '';| this.apiBasePath = this.platformLocation.getBaseHrefFromDOM().replace(new RegExp('/\$'), '');|" src/app/services/api.service.ts && \
+    grep -rl "/resources/mining-pools/" src | xargs sed -i 's|/resources/mining-pools/|resources/mining-pools/|g'
+
+RUN npm ci && npm run build -- --base-href './'
 
 RUN git clone --depth 1 https://github.com/mempool/electrs /opt/mempool-electrs \
  && cd /opt/mempool-electrs \
