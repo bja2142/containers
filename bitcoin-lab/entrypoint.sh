@@ -66,20 +66,23 @@ if [[ "${AUTO_SCAN}" == "1" ]]; then
   /usr/local/bin/peer-discovery.sh "${BITCOIN_DATADIR}" "${SCAN_NET}" &
 fi
 
-# Tell students what's running
-echo "echo" >> /home/user/.bashrc
-echo "echo ────────────────────────────────────────────────────────────────" >> /home/user/.bashrc
-echo "echo Bitcoin Core is already running in the background." >> /home/user/.bashrc
-echo "echo - datadir  : ${BITCOIN_DATADIR}" >> /home/user/.bashrc
-echo "echo - config   : ${CONF}" >> /home/user/.bashrc
-echo "echo - logs     : tail -f ${LOG}" >> /home/user/.bashrc
-if [[ "${AUTO_WALLET}" == "1" ]]; then
-    echo "echo - wallet   : ${WALLET_NAME} (if AUTO_WALLET=1)" >> /home/user/.bashrc
-fi
-echo "echo - check    : bitcoin-cli -datadir=${BITCOIN_DATADIR} getblockchaininfo"  >> /home/user/.bashrc
-echo "echo - peers    : bitcoin-cli -datadir=${BITCOIN_DATADIR} getpeerinfo \| jq '.[].addr'"  >> /home/user/.bashrc
-echo "echo ────────────────────────────────────────────────────────────────"  >> /home/user/.bashrc
-echo "echo "   >> /home/user/.bashrc
+
+grep 'Bitcoin Core is already running' /home/user/.bashrc 2>/dev/null 1>/dev/null || (
+  # Tell students what's running
+  echo "echo" >> /home/user/.bashrc
+  echo "echo ────────────────────────────────────────────────────────────────" >> /home/user/.bashrc
+  echo "echo Bitcoin Core is already running in the background." >> /home/user/.bashrc
+  echo "echo - datadir  : ${BITCOIN_DATADIR}" >> /home/user/.bashrc
+  echo "echo - config   : ${CONF}" >> /home/user/.bashrc
+  echo "echo - logs     : tail -f ${LOG}" >> /home/user/.bashrc
+  if [[ "${AUTO_WALLET}" == "1" ]]; then
+      echo "echo - wallet   : ${WALLET_NAME} (if AUTO_WALLET=1)" >> /home/user/.bashrc
+  fi
+  echo "echo - check    : bitcoin-cli -datadir=${BITCOIN_DATADIR} getblockchaininfo"  >> /home/user/.bashrc
+  echo "echo - peers    : bitcoin-cli -datadir=${BITCOIN_DATADIR} getpeerinfo \| jq '.[].addr'"  >> /home/user/.bashrc
+  echo "echo ────────────────────────────────────────────────────────────────"  >> /home/user/.bashrc
+  echo "echo "   >> /home/user/.bashrc
+)
 
 # Hand off to ttyd/tmux (the image’s CMD)
 exec "$@"
