@@ -91,6 +91,11 @@ At build time:
 
 This lets students immediately script/inspect Bitcoin objects without setup.
 
+## Web Server
+
+A simple http.server on port 8000 is started from `/home/user/shared` so that
+students can easily drop things like wallet addresses or other artifacts
+and share them with each other over the command line.
 
 ##  **Configurable Environment for Lab Automation**
 
