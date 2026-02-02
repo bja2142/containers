@@ -116,6 +116,75 @@ jq \
  ' .ELECTRUM.PORT = 50001 ' /opt/mempool/backend/mempool-config.json \
   > /tmp/m.json && mv /tmp/m.json /opt/mempool/backend/mempool-config.json
 
+
+
+jq '
+  .MEMPOOL.AUTOMATIC_POOLS_UPDATE = false
+| .MEMPOOL.POOLS_JSON_URL = ""
+| .MEMPOOL.POOLS_JSON_TREE_URL = ""
+| .MEMPOOL.PRICE_UPDATES_PER_HOUR = 0
+| .STATISTICS.ENABLED = false
+| .FIAT_PRICE.ENABLED = false
+| .MEMPOOL_SERVICES.API = ""
+| .MEMPOOL_SERVICES.ACCELERATIONS = false
+| .EXTERNAL_DATA_SERVER.MEMPOOL_API = ""
+| .EXTERNAL_DATA_SERVER.MEMPOOL_ONION = ""
+| .EXTERNAL_DATA_SERVER.LIQUID_API = ""
+| .EXTERNAL_DATA_SERVER.LIQUID_ONION = ""
+' /opt/mempool/backend/mempool-config.json \
+  > /opt/mempool/backend/mempool-config.offline.json && \
+mv /opt/mempool/backend/mempool-config.offline.json /opt/mempool/backend/mempool-config.json
+
+
+
+
+jq '
+  .MEMPOOL.AUTOMATIC_POOLS_UPDATE = false
+| .MEMPOOL.POOLS_JSON_URL = "http://127.0.0.1:8080/dummy/pools/pools-v2.json"
+| .MEMPOOL.POOLS_JSON_TREE_URL = "http://127.0.0.1:8080/dummy/pools/tree.json"
+| .FIAT_PRICE.ENABLED = false
+| .MEMPOOL.PRICE_UPDATES_PER_HOUR = 0
+' /opt/mempool/backend/mempool-config.json \
+> /opt/mempool/backend/mempool-config.offline.json && \
+mv /opt/mempool/backend/mempool-config.offline.json /opt/mempool/backend/mempool-config.json
+
+
+mkdir -p /var/www/mempool/browser/dummy/pools
+
+# pools-v2.json — use your own offline copy here.
+# If you don't have one handy, create a minimal skeleton:
+
+cat >/var/www/mempool/browser/dummy/pools/pools-v2.json <<'JSON'
+[]
+JSON
+
+
+# tree.json — minimal GitHub-like tree with a sha for pools-v2.json
+cat >/var/www/mempool/browser/dummy/pools/tree.json <<'JSON'
+
+{
+  "tree": [
+    {
+      "path": "pools-v2.json",
+      "sha": "offline-local-sha"
+    }
+  ]
+}
+JSON
+
+# Make sure Nginx can read them
+chown -R www-data:www-data /var/www/mempool/browser/dummy/pools
+
+
+
+
+jq \
+      --arg hash "$(sha1sum /var/www/mempool/browser/dummy/pools/pools-v2.json | awk '{print $1}')" \
+    '  .tree[0].sha = $hash
+    ' /var/www/mempool/browser/dummy/pools/tree.json > tree.json.tmp && mv tree.json.tmp /var/www/mempool/browser/dummy/pools/tree.json
+
+
+
 mkdir -p /var/run/mysql
 ln -sf /run/mysqld/mysqld.sock /var/run/mysql/mysql.sock
 
