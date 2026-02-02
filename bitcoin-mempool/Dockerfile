@@ -51,20 +51,21 @@ RUN npm run preinstall && npm ci && npm run build
 # --- Build frontend (static files) ---
 WORKDIR /opt/mempool/frontend
 #fix for proxy
-RUN sed -i "s|document.location.port + '{network}|document.location.port + document.location.pathname.replace(new RegExp('/\$'), '') + '{network}|" src/app/services/websocket.service.ts && \
-    sed -i "s|import { HttpClient|import { PlatformLocation } from '@angular/common';\nimport { HttpClient|" src/app/services/api.service.ts && \
-    sed -i "s|private httpClient: HttpClient,|private httpClient: HttpClient, private platformLocation: PlatformLocation,|" src/app/services/api.service.ts && \
-    sed -i "s|this.apiBasePath = '';| this.apiBasePath = this.platformLocation.getBaseHrefFromDOM().replace(new RegExp('/\$'), '');|" src/app/services/api.service.ts && \
-    sed -i "s|this.stateService.env.ROOT_NETWORK ? '/' + network : '';|this.stateService.env.ROOT_NETWORK ? '/' + network : ''; this.apiBasePath = this.platformLocation.getBaseHrefFromDOM().replace(new RegExp('/\$'), '') + this.apiBasePath ;|" src/app/services/api.service.ts && \
-    grep -rl "/resources/mining-pools/" src | xargs sed -i 's|/resources/mining-pools/|resources/mining-pools/|g' && \
-    sed -i "s|import { HttpClient|import { PlatformLocation } from '@angular/common';\nimport { HttpClient|" src/app/services/electrs-api.service.ts && \
-    sed -i "s|private httpClient: HttpClient,|private httpClient: HttpClient, private platformLocation: PlatformLocation,|" src/app/services/electrs-api.service.ts && \
-    sed -i "s|this.apiBasePath = '';| this.apiBasePath = this.platformLocation.getBaseHrefFromDOM().replace(new RegExp('/\$'), '');|" src/app/services/electrs-api.service.ts && \
-    sed -i "s|this.apiBasePath = network && network !== this.stateService.env.ROOT_NETWORK ? '/' + network : '';|this.apiBasePath = network \&\& network !== this.stateService.env.ROOT_NETWORK ? '/' + network : ''; this.apiBasePath = this.platformLocation.getBaseHrefFromDOM().replace(new RegExp('/\$'), '') + this.apiBasePath ;|" src/app/services/electrs-api.service.ts
+RUN grep -rl "/resources/mining-pools/" src | xargs sed -i 's|/resources/mining-pools/|resources/mining-pools/|g' 
+    #sed -i "s|document.location.port + '{network}|document.location.port + document.location.pathname.replace(new RegExp('/\$'), '') + '{network}|" src/app/services/websocket.service.ts && \
+    #sed -i "s|import { HttpClient|import { PlatformLocation } from '@angular/common';\nimport { HttpClient|" src/app/services/api.service.ts && \
+    #sed -i "s|private httpClient: HttpClient,|private httpClient: HttpClient, private platformLocation: PlatformLocation,|" src/app/services/api.service.ts && \
+    #sed -i "s|this.apiBasePath = '';| this.apiBasePath = this.platformLocation.getBaseHrefFromDOM().replace(new RegExp('/\$'), '');|" src/app/services/api.service.ts && \
+    #sed -i "s|this.stateService.env.ROOT_NETWORK ? '/' + network : '';|this.stateService.env.ROOT_NETWORK ? '/' + network : ''; this.apiBasePath = this.platformLocation.getBaseHrefFromDOM().replace(new RegExp('/\$'), '') + this.apiBasePath ;|" src/app/services/api.service.ts && \
+    #sed -i "s|import { HttpClient|import { PlatformLocation } from '@angular/common';\nimport { HttpClient|" src/app/services/electrs-api.service.ts && \
+    #sed -i "s|private httpClient: HttpClient,|private httpClient: HttpClient, private platformLocation: PlatformLocation,|" src/app/services/electrs-api.service.ts && \
+    #sed -i "s|this.apiBasePath = '';| this.apiBasePath = this.platformLocation.getBaseHrefFromDOM().replace(new RegExp('/\$'), '');|" src/app/services/electrs-api.service.ts && \
+    #sed -i "s|this.apiBasePath = network && network !== this.stateService.env.ROOT_NETWORK ? '/' + network : '';|this.apiBasePath = network \&\& network !== this.stateService.env.ROOT_NETWORK ? '/' + network : ''; this.apiBasePath = this.platformLocation.getBaseHrefFromDOM().replace(new RegExp('/\$'), '') + this.apiBasePath ;|" src/app/services/electrs-api.service.ts
 
 
-RUN npm ci && npm run build -- --base-href './'
-
+#UN npm ci && npm run build -- --base-href './'
+RUN npm ci && npm run build
+    
 RUN git clone --depth 1 https://github.com/mempool/electrs /opt/mempool-electrs \
  && cd /opt/mempool-electrs \
  && cargo build --release
