@@ -67,6 +67,25 @@ if [[ "${AUTO_SCAN}" == "1" ]]; then
 fi
 
 
+
+# ---[ Lightweight static HTTP server on :8000 ]---
+: "${STATIC_HTTP_PORT:=8000}"
+: "${STATIC_HTTP_ROOT:=/home/user/share}"
+: "${HTTP_LOG:=/home/user/.http-server.log}"
+
+# Ensure the directory exists and is writable
+mkdir -p "${STATIC_HTTP_ROOT}"
+
+# Start a background Python HTTP server if not already running
+if ! pgrep -f "python3 -m http.server.*${STATIC_HTTP_PORT}" >/dev/null 2>&1; then
+  nohup python3 -m http.server \
+        --directory "${STATIC_HTTP_ROOT}" \
+        "${STATIC_HTTP_PORT}" \
+        > "${HTTP_LOG}" 2>&1 & disown || true
+  echo "[entrypoint] Static server: http://0.0.0.0:${STATIC_HTTP_PORT} (root: ${STATIC_HTTP_ROOT})"
+  echo "[entrypoint] Logs: ${HTTP_LOG}"
+fi
+
 grep 'Bitcoin Core is already running' /home/user/.bashrc 2>/dev/null 1>/dev/null || (
   # Tell students what's running
   echo "echo" >> /home/user/.bashrc
@@ -80,9 +99,12 @@ grep 'Bitcoin Core is already running' /home/user/.bashrc 2>/dev/null 1>/dev/nul
   fi
   echo "echo - check    : bitcoin-cli -datadir=${BITCOIN_DATADIR} getblockchaininfo"  >> /home/user/.bashrc
   echo "echo - peers    : bitcoin-cli -datadir=${BITCOIN_DATADIR} getpeerinfo \| jq '.[].addr'"  >> /home/user/.bashrc
+  echo "echo Static server on port ${STATIC_HTTP_PORT} serving ${STATIC_HTTP_ROOT}" >> /home/user/.bashrc
+  echo "echo - logs: tail -f ${STATIC_HTTP_ROOT%/}/http-server.log" >> /home/user/.bashrc
   echo "echo ────────────────────────────────────────────────────────────────"  >> /home/user/.bashrc
   echo "echo "   >> /home/user/.bashrc
 )
+
 
 # Hand off to ttyd/tmux (the image’s CMD)
 exec "$@"
