@@ -94,6 +94,9 @@ RUN chmod +x /usr/local/bin/mariadb-init.sh
 COPY electrs-init.sh /usr/local/bin/electrs-init.sh
 RUN chmod +x /usr/local/bin/electrs-init.sh
 
+COPY btc-rpc-explorer-init.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/btc-rpc-explorer-init.sh
+
 # --- Backend configuration: copy sample and patch with env at runtime ---
 # We'll generate backend/mempool-config.json on first start using envs below.
 COPY mempool-entrypoint.sh /usr/local/bin/mempool-entrypoint.sh
