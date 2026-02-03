@@ -66,7 +66,20 @@ if [[ "${AUTO_SCAN}" == "1" ]]; then
   /usr/local/bin/peer-discovery.sh "${BITCOIN_DATADIR}" "${SCAN_NET}" &
 fi
 
+: "${AGENT_LOG:=/home/user/.agent.log}"
+: "${AGENT_ON:=0}"
+: "${AGENT_MEMPOOL_TRIGGER:=50}"
 
+# Start a background Python HTTP server if not already running
+if [[ "${AGENT_ON}" == "1" ]]; then
+  if ! pgrep -f "python3 /home/user/scripts/agent.py" >/dev/null 2>&1; then
+    nohup python3 /home/user/scripts/agent.py \
+      --log-path "${AGENT_LOG}" \
+      -v --mempool-trigger "${AGENT_MEMPOOL_TRIGGER}" 2>&1 & disown || true
+    echo "[entrypoint] Started agent."
+    echo "[entrypoint] Logs: ${AGENT_LOG}"
+  fi
+fi
 
 # ---[ Lightweight static HTTP server on :8000 ]---
 : "${STATIC_HTTP_PORT:=8000}"
@@ -86,6 +99,8 @@ if ! pgrep -f "python3 -m http.server.*${STATIC_HTTP_PORT}" >/dev/null 2>&1; the
   echo "[entrypoint] Logs: ${HTTP_LOG}"
 fi
 
+
+
 grep 'Bitcoin Core is already running' /home/user/.bashrc 2>/dev/null 1>/dev/null || (
   # Tell students what's running
   echo "echo" >> /home/user/.bashrc
@@ -100,7 +115,7 @@ grep 'Bitcoin Core is already running' /home/user/.bashrc 2>/dev/null 1>/dev/nul
   echo "echo - check    : bitcoin-cli -datadir=${BITCOIN_DATADIR} getblockchaininfo"  >> /home/user/.bashrc
   echo "echo - peers    : bitcoin-cli -datadir=${BITCOIN_DATADIR} getpeerinfo \| jq '.[].addr'"  >> /home/user/.bashrc
   echo "echo Static server on port ${STATIC_HTTP_PORT} serving ${STATIC_HTTP_ROOT}" >> /home/user/.bashrc
-  echo "echo - logs: tail -f ${STATIC_HTTP_ROOT%/}/http-server.log" >> /home/user/.bashrc
+  echo "echo - logs: tail -f ${HTTP_LOG}" >> /home/user/.bashrc
   echo "echo ────────────────────────────────────────────────────────────────"  >> /home/user/.bashrc
   echo "echo "   >> /home/user/.bashrc
 )

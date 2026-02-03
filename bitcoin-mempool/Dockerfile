@@ -7,11 +7,11 @@ USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl gnupg dirmngr git jq \
     mariadb-server mariadb-client \
-    nginx \
+    nginx python-is-python3 libzmq3-dev \
     supervisor \
     make g++ python3 \
     npm  && \
-    curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
@@ -65,22 +65,27 @@ RUN grep -rl "/resources/mining-pools/" src | xargs sed -i 's|/resources/mining-
 
 #UN npm ci && npm run build -- --base-href './'
 RUN npm ci && npm run build
-    
+
+# ------------------------------------------------------------------------
+# NEW: Install BTC RPC Explorer
+# ------------------------------------------------------------------------
+RUN npm install -g btc-rpc-explorer
+
 RUN git clone --depth 1 https://github.com/mempool/electrs /opt/mempool-electrs \
  && cd /opt/mempool-electrs \
  && cargo build --release
 RUN ln -sf /opt/mempool-electrs/target/release/electrs /usr/local/bin/electrs
 
 
-
 # --- Install frontend under Nginx web root ---
 RUN mkdir -p /var/www/ && \
-    cp -r dist/mempool /var/www/mempool
+    cp -r /opt/mempool/frontend/dist/mempool /var/www/mempool
 
 # --- Minimal Nginx site: serve frontend on :8080 and proxy /api to backend :8999 ---
 RUN rm -f /etc/nginx/sites-enabled/default
 COPY nginx-mempool.conf /etc/nginx/sites-enabled/mempool.conf
 EXPOSE 8080
+
 
 # --- Database initialization & configuration ---
 COPY mariadb-init.sh /usr/local/bin/mariadb-init.sh
@@ -96,6 +101,7 @@ RUN chmod +x /usr/local/bin/mempool-entrypoint.sh
 
 # --- Supervisord to manage mysqld, mempool-backend (node), nginx ---
 COPY supervisord.conf /etc/supervisor/conf.d/mempool.conf
+
 
 # --- Default environment (override as needed) ---
 ENV BITCOIN_DATADIR="/home/user/.bitcoin" \
@@ -116,6 +122,9 @@ ENV BITCOIN_DATADIR="/home/user/.bitcoin" \
     DB_USER="mempool" \
     DB_PASS="mempool" \
     STATS_ENABLED="true"
+
+
+WORKDIR /home/user
 
 # If your base image still starts ttyd, we supersede it here.
 ENTRYPOINT ["/usr/local/bin/mempool-entrypoint.sh"]

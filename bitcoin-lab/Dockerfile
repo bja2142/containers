@@ -32,6 +32,12 @@ COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY peer-discovery.sh /usr/local/bin/peer-discovery.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/peer-discovery.sh
 
+
+RUN mkdir -p /home/user/scripts
+COPY agent.py /home/user/scripts/agent.py
+COPY miner.py /home/user/scripts/miner.py
+RUN chown -R user:user /home/user/scripts 
+
 USER user 
 
 
