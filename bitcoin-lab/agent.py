@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import socket
 import threading
 import json
@@ -13,6 +14,8 @@ import os
 """
 AI Disclosure: this script was fully vibed by Gemini 3 Pro
 """
+
+
 
 # --- DEFAULT CONFIGURATION ---
 DEFAULT_PORT = 31337
@@ -272,7 +275,6 @@ class BitcoinAgent:
                     if mempool_info and isinstance(mempool_info, dict):
                         count = int(mempool_info.get("size", 0))
                         
-                        # USE CONFIGURABLE THRESHOLD
                         if count > self.mempool_trigger:
                             self.logger.info(f"Mempool Congestion ({count} > {self.mempool_trigger}). Mining 1 block to clear...")
                             mine_addr = self.get_my_shareable_address()
@@ -291,7 +293,7 @@ class BitcoinAgent:
                 except ValueError:
                     pass
 
-                # Mine if broke
+                # Mine if explicitly broke
                 if current_bal == 0.0:
                     self.logger.warning("Balance is 0.0. Mining 1 block to refill...")
                     mine_addr = self.get_my_shareable_address()
@@ -329,8 +331,16 @@ class BitcoinAgent:
 
                 if tx_targets:
                     txid = self.rpc("sendmany", ["", json.dumps(tx_targets)])
+                    
+                    # --- NEW FIX: Fallback Mining ---
                     if txid and isinstance(txid, str):
                         self.logger.info(f"Broadcasted TXID: {txid}")
+                    else:
+                        # If sendmany returns None, it likely failed (insufficient funds?)
+                        self.logger.warning("Transaction failed (Insufficient Funds?). Mining 1 block to recover...")
+                        mine_addr = self.get_my_shareable_address()
+                        if mine_addr:
+                            self.rpc("generatetoaddress", [1, mine_addr])
 
             except Exception as e:
                 self.logger.error(f"Transaction Loop Error: {e}")
@@ -361,7 +371,6 @@ class BitcoinAgent:
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
 
-        # Main loop
         while self.running:
             time.sleep(0.5)
         
