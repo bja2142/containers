@@ -1,112 +1,117 @@
-# --- Build a monolithic "Bitcoin Core + Mempool" container ---
+# ==========================================
+# STAGE 1: Rust Builder (Electrs)
+# ==========================================
+FROM debian:bookworm AS builder-rust
+ARG DEBIAN_FRONTEND=noninteractive
+
+# Install Rust build deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    clang cmake pkg-config libssl-dev git curl build-essential ca-certificates
+
+# Install Rust
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Build Electrs
+RUN git clone --depth 1 https://github.com/mempool/electrs /opt/mempool-electrs \
+ && cd /opt/mempool-electrs \
+ && cargo build --release \
+ && strip target/release/electrs
+
+
+# ==========================================
+# STAGE 2: Node Builder (Mempool & Explorer)
+# ==========================================
+FROM debian:bookworm AS builder-node
+ARG DEBIAN_FRONTEND=noninteractive
+
+# FIXED: Added 'rsync' (required for frontend build) and Rust deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl git python3 build-essential rsync pkg-config libssl-dev ca-certificates \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs 
+
+# Install Rust (Required for mempool-backend 'gbt' compilation)
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# --- A. Mempool Frontend & Backend ---
+WORKDIR /opt/mempool
+RUN git clone --depth 1 https://github.com/mempool/mempool.git .
+
+# 1. Build Frontend (Static Files)
+WORKDIR /opt/mempool/frontend
+# Only running the active sed command, ignoring the commented-out ones
+RUN grep -rl "/resources/mining-pools/" src | xargs sed -i 's|/resources/mining-pools/|resources/mining-pools/|g'
+
+RUN npm install && npm run build
+
+# 2. Build Backend
+WORKDIR /opt/mempool/backend
+RUN npm run preinstall && npm ci && npm run build
+
+# 1. Prune dev dependencies to clear space
+RUN npm prune --production
+
+RUN cp -r rust-gbt node_modules/rust-gbt-copy && \
+    rm node_modules/rust-gbt \
+    && mv node_modules/rust-gbt-copy node_modules/rust-gbt
+
+RUN rm -rf ../rust/gbt/target ../rust/gbt/src ../rust/gbt/.git
+
+# --- B. BTC RPC Explorer ---
+RUN npm install --prefix /opt/btc-rpc-explorer -g btc-rpc-explorer
+
+
+# ==========================================
+# STAGE 3: Final Runtime
+# ==========================================
+# Assuming this is your locally built optimized image
 FROM ghcr.io/bja2142/bitcoin-lab:latest
 
 USER root
 
-# --- OS deps for Mempool backend/frontend, DB & supervision ---
+# Install ONLY Runtime Dependencies for Mempool/DB/Nginx
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl gnupg dirmngr git jq \
     mariadb-server mariadb-client \
-    nginx python-is-python3 libzmq3-dev \
-    supervisor \
-    make g++ python3 \
-    npm  && \
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    nginx python-is-python3 supervisor \
+    curl ca-certificates \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# --- Node.js LTS (v18+ is fine; Mempool requires v16+) ---
-# (Debian Bookworm ships a recent Node; if you prefer NodeSource, swap in their repo)
+# --- Copy Electrs ---
+COPY --from=builder-rust /opt/mempool-electrs/target/release/electrs /usr/local/bin/electrs
 
-
-# --- add Rust toolchain & build deps ---
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    clang cmake pkg-config libssl-dev \
- && rm -rf /var/lib/apt/lists/*
-
-
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-    | sh -s -- -y --default-toolchain stable
-ENV PATH="/root/.cargo/bin:/home/user/.cargo/bin:${PATH}"
-
-
-
-# --- Get Mempool source (frontend + backend) ---
-# We build from source to keep a single-container deployment.
-# (Mempool's official docker/compose is multi-container; we're collapsing it.)  [1](https://github.com/mempool/mempool/blob/master/docker/README.md)
-RUN git clone --depth 1 https://github.com/mempool/mempool.git /opt/mempool
-WORKDIR /opt/mempool
-
-# if it starts breaking, consider pinning to this commit: 20e4979628bca4ca5a3b74c4407a0ff8e3ad71a6
-
-
-
-
-
-# --- Build backend ---
+# --- Copy Mempool Backend (Artifacts) ---
 WORKDIR /opt/mempool/backend
-RUN npm run preinstall && npm ci && npm run build
 
+COPY --from=builder-node /opt/mempool/backend/dist ./dist
+COPY --from=builder-node /opt/mempool/backend/node_modules ./node_modules
+COPY --from=builder-node /opt/mempool/backend/package.json ./package.json
+COPY --from=builder-node /opt/mempool/backend/mempool-config.sample.json ./mempool-config.sample.json
 
-# --- Build frontend (static files) ---
-WORKDIR /opt/mempool/frontend
-#fix for proxy
-RUN grep -rl "/resources/mining-pools/" src | xargs sed -i 's|/resources/mining-pools/|resources/mining-pools/|g' 
-    #sed -i "s|document.location.port + '{network}|document.location.port + document.location.pathname.replace(new RegExp('/\$'), '') + '{network}|" src/app/services/websocket.service.ts && \
-    #sed -i "s|import { HttpClient|import { PlatformLocation } from '@angular/common';\nimport { HttpClient|" src/app/services/api.service.ts && \
-    #sed -i "s|private httpClient: HttpClient,|private httpClient: HttpClient, private platformLocation: PlatformLocation,|" src/app/services/api.service.ts && \
-    #sed -i "s|this.apiBasePath = '';| this.apiBasePath = this.platformLocation.getBaseHrefFromDOM().replace(new RegExp('/\$'), '');|" src/app/services/api.service.ts && \
-    #sed -i "s|this.stateService.env.ROOT_NETWORK ? '/' + network : '';|this.stateService.env.ROOT_NETWORK ? '/' + network : ''; this.apiBasePath = this.platformLocation.getBaseHrefFromDOM().replace(new RegExp('/\$'), '') + this.apiBasePath ;|" src/app/services/api.service.ts && \
-    #sed -i "s|import { HttpClient|import { PlatformLocation } from '@angular/common';\nimport { HttpClient|" src/app/services/electrs-api.service.ts && \
-    #sed -i "s|private httpClient: HttpClient,|private httpClient: HttpClient, private platformLocation: PlatformLocation,|" src/app/services/electrs-api.service.ts && \
-    #sed -i "s|this.apiBasePath = '';| this.apiBasePath = this.platformLocation.getBaseHrefFromDOM().replace(new RegExp('/\$'), '');|" src/app/services/electrs-api.service.ts && \
-    #sed -i "s|this.apiBasePath = network && network !== this.stateService.env.ROOT_NETWORK ? '/' + network : '';|this.apiBasePath = network \&\& network !== this.stateService.env.ROOT_NETWORK ? '/' + network : ''; this.apiBasePath = this.platformLocation.getBaseHrefFromDOM().replace(new RegExp('/\$'), '') + this.apiBasePath ;|" src/app/services/electrs-api.service.ts
+# --- Copy Mempool Frontend (Static) ---
+RUN mkdir -p /var/www/
+COPY --from=builder-node /opt/mempool/frontend/dist/mempool /var/www/mempool
 
+# --- Copy BTC RPC Explorer ---
+COPY --from=builder-node /opt/btc-rpc-explorer /opt/btc-rpc-explorer
+RUN ln -s /opt/btc-rpc-explorer/bin/btc-rpc-explorer /usr/local/bin/btc-rpc-explorer
 
-#UN npm ci && npm run build -- --base-href './'
-RUN npm ci && npm run build
-
-# ------------------------------------------------------------------------
-# NEW: Install BTC RPC Explorer
-# ------------------------------------------------------------------------
-RUN npm install -g btc-rpc-explorer
-
-RUN git clone --depth 1 https://github.com/mempool/electrs /opt/mempool-electrs \
- && cd /opt/mempool-electrs \
- && cargo build --release
-RUN ln -sf /opt/mempool-electrs/target/release/electrs /usr/local/bin/electrs
-
-
-# --- Install frontend under Nginx web root ---
-RUN mkdir -p /var/www/ && \
-    cp -r /opt/mempool/frontend/dist/mempool /var/www/mempool
-
-# --- Minimal Nginx site: serve frontend on :8080 and proxy /api to backend :8999 ---
-RUN rm -f /etc/nginx/sites-enabled/default
+# --- Configuration & Scripts ---
 COPY nginx-mempool.conf /etc/nginx/sites-enabled/mempool.conf
-EXPOSE 8080
+RUN rm -f /etc/nginx/sites-enabled/default
 
-
-# --- Database initialization & configuration ---
 COPY mariadb-init.sh /usr/local/bin/mariadb-init.sh
-RUN chmod +x /usr/local/bin/mariadb-init.sh
-
 COPY electrs-init.sh /usr/local/bin/electrs-init.sh
-RUN chmod +x /usr/local/bin/electrs-init.sh
-
-COPY btc-rpc-explorer-init.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/btc-rpc-explorer-init.sh
-
-# --- Backend configuration: copy sample and patch with env at runtime ---
-# We'll generate backend/mempool-config.json on first start using envs below.
+COPY btc-rpc-explorer-init.sh /usr/local/bin/btc-rpc-explorer-init.sh
 COPY mempool-entrypoint.sh /usr/local/bin/mempool-entrypoint.sh
-RUN chmod +x /usr/local/bin/mempool-entrypoint.sh
-
-# --- Supervisord to manage mysqld, mempool-backend (node), nginx ---
 COPY supervisord.conf /etc/supervisor/conf.d/mempool.conf
 
+RUN chmod +x /usr/local/bin/*.sh
 
-# --- Default environment (override as needed) ---
+# Setup Environment
 ENV BITCOIN_DATADIR="/home/user/.bitcoin" \
     MEMPOOL_NETWORK="mainnet" \
     MEMPOOL_HTTP_PORT="8999" \
@@ -126,9 +131,7 @@ ENV BITCOIN_DATADIR="/home/user/.bitcoin" \
     DB_PASS="mempool" \
     STATS_ENABLED="true"
 
-
 WORKDIR /home/user
 
-# If your base image still starts ttyd, we supersede it here.
 ENTRYPOINT ["/usr/local/bin/mempool-entrypoint.sh"]
-CMD ["supervisord","-n","-c","/etc/supervisor/supervisord.conf"]
+CMD ["supervisord", "-n", "-c", "/etc/supervisor/supervisord.conf"]

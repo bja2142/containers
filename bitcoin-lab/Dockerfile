@@ -1,65 +1,74 @@
-#FROM --platform=i386 i386/debian:bookworm
-#cmake -B build -S .  -DWITH_QRENCODE=OFF -DBUILD_GUI=OFF -DCMAKE_CXX_FLAGS="-m32" \
-FROM debian:bookworm
+# --- STAGE 1: Build ---
+# --- STAGE 1: Build ---
+FROM debian:bookworm AS builder
 ARG DEBIAN_FRONTEND=noninteractive
+
+# Added ca-certificates for git clone and libssl-dev for the build
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential cmake pkgconf git patch wget curl \
+    ca-certificates libssl-dev \
+    libgmp3-dev libevent-dev libboost-dev libsqlite3-dev \
+    libcapnp-dev capnproto libzmq3-dev \
+	python3 python3-venv python3-pip python3-dev
+
+
 COPY patches/custom-genesis.patch /custom-genesis.patch
 COPY build-bitcoin.sh /build-bitcoin.sh
-RUN apt-get clean && apt-get update && apt-get -y upgrade && \
-	apt-get -y install apt-utils gcc screen tmux \
-	python3 python3-pip vim unzip binutils tcpdump wget \
-	fakeroot dbus base whiptail hexedit python3-venv \
-	patch wamerican ucf manpages procps jq \
-	file git luajit make lua5.4 dialog curl \
-	less cowsay netcat-openbsd iproute2 iputils-ping\
-	build-essential cmake pkgconf python3-dev libgmp3-dev \
-	libevent-dev libboost-dev libsqlite3-dev libcapnp-dev capnproto  && \
-	bash /build-bitcoin.sh && rm /build-bitcoin.sh /custom-genesis.patch && \
-	mkdir -p /tmplibs && \
-	apt-get remove -y cmake pkgconf  \
-	patch git  && apt-get -y autoremove --purge && \
-	apt-get clean -y && \
-	find / -type f -executable | grep "bin" | while read fn; do (file $fn 2>/dev/null | grep ELF 1>/dev/null 2>/dev/null && strip $fn || true); done
+
+# The script should now be able to clone via HTTPS
+RUN bash /build-bitcoin.sh && \
+    strip /usr/local/bin/bitcoin* /usr/local/bin/bitcoind
 
 RUN wget https://github.com/tsl0922/ttyd/releases/latest/download/ttyd.$(uname -m) -O /ttyd && chmod +x /ttyd
 
+
+RUN python3 -m venv /opt/venv \
+ && /opt/venv/bin/pip install --no-cache-dir --upgrade pip setuptools wheel \
+ && /opt/venv/bin/pip install --no-cache-dir python-bitcoinlib bitcoinlib
+
+
+# --- STAGE 2: Final (The Slim Image) ---
+FROM debian:bookworm-slim
+ARG DEBIAN_FRONTEND=noninteractive
+
+# Added ca-certificates and libssl3 for runtime
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates libssl3 \
+    libevent-extra-2.1-7 \
+    libevent-pthreads-2.1-7 \
+    libboost-filesystem1.74.0 \
+    libboost-thread1.74.0 \
+    libsqlite3-0 \
+    libzmq5 \
+    libgmp10 \
+    libcapnp-0.9.2 \
+    python3 python3-venv python3-pip \
+    tmux screen procps jq curl netcat-openbsd iproute2 nano \
+	vim-tiny less socat \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# 2. Copy the binaries from the builder
+COPY --from=builder /usr/local/bin/bitcoin* /usr/local/bin/
+COPY --from=builder /usr/local/bin/bitcoind /usr/local/bin/
+COPY --from=builder /ttyd /usr/local/bin/ttyd
+
+# 3. Setup User and Environment
 RUN useradd -m user && echo "user:password" | chpasswd
-# We set WORKDIR, as this gets extracted by Webvm to be used as the cwd. This is optional.
 WORKDIR /home/user/
 
-RUN echo 'root:password' | chpasswd
-
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-COPY peer-discovery.sh /usr/local/bin/peer-discovery.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/peer-discovery.sh
+COPY --chown=user:user agent.py miner.py ./scripts/
+COPY --chmod=755 entrypoint.sh peer-discovery.sh /usr/local/bin/
 
 
-RUN mkdir -p /home/user/scripts
-COPY agent.py /home/user/scripts/agent.py
-COPY miner.py /home/user/scripts/miner.py
-RUN chown -R user:user /home/user/scripts 
+COPY --from=builder /opt/venv /opt/venv
 
-USER user 
+RUN echo "source /opt/venv/bin/activate" >> /home/user/.bashrc
 
+USER user
 
-# Environment toggles for the lab (override with docker compose or docker run -e ...)
 ENV BITCOIN_DATADIR="/home/user/.bitcoin" \
-    BITCOIN_EXTRA_ARGS="" \
-    SEED_HOSTS="instructor:8333" \
-    AUTO_SCAN="1" \
-    AUTO_WALLET="0" \
-    SCAN_NET="auto"
+    HOME="/home/user" TERM="xterm" USER="user" SHELL="/bin/bash" \
+    PATH="/opt/venv/bin:$PATH"
 
-# Use the entrypoint to start bitcoind in background, then exec your ttyd/tmux
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-
-
-RUN python3 -m venv .venv
-
-RUN echo "echo 'source /home/user/.venv/bin/activate' >> /home/user/.bashrc"
-
-RUN /bin/bash -c "source /home/user/.venv/bin/activate && pip3 install bitcoinlib"
-
-# We set env, as this gets extracted by Webvm. This is optional.
-ENV HOME="/home/user" TERM="xterm" USER="user" SHELL="/bin/bash" EDITOR="vim" LANG="en_US.UTF-8" LC_ALL="C"
-
-CMD [ "/ttyd", "-W", "/bin/tmux", "new", "-As0" ]
+CMD [ "ttyd", "-W", "/bin/tmux", "new", "-As0" ]
