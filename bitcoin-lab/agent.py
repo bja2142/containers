@@ -15,8 +15,6 @@ import os
 AI Disclosure: this script was fully vibed by Gemini 3 Pro
 """
 
-
-
 # --- DEFAULT CONFIGURATION ---
 DEFAULT_PORT = 31337
 DEFAULT_LOG_PATH = "agent.log"
@@ -51,6 +49,7 @@ class BitcoinAgent:
         # State
         self.local_addresses = []
         self.peer_map = {} 
+        self.last_rpc_error = None  # Store the last error message
         
         # Ensure wallet exists and load initial state
         self.check_wallet()
@@ -59,6 +58,7 @@ class BitcoinAgent:
     # --- BITCOIN RPC HELPERS ---
     def rpc(self, method, params=None):
         """Executes a bitcoin-cli command with safe parsing."""
+        self.last_rpc_error = None # Reset error state
         if params is None: params = []
         
         cmd = self.rpc_cmd + [method] + [str(p) for p in params]
@@ -67,7 +67,8 @@ class BitcoinAgent:
             self.logger.info(f"CMD EXEC: {' '.join(cmd)}")
 
         try:
-            result_bytes = subprocess.check_output(cmd, stderr=subprocess.DEVNULL)
+            # Changed stderr to PIPE to capture specific error messages
+            result_bytes = subprocess.check_output(cmd, stderr=subprocess.PIPE)
             result_str = result_bytes.decode('utf-8').strip()
             
             if self.verbose and result_str:
@@ -81,10 +82,20 @@ class BitcoinAgent:
                 return result_str
 
         except subprocess.CalledProcessError as e:
+            # Capture and store the specific error message
+            if e.stderr:
+                try:
+                    self.last_rpc_error = e.stderr.decode('utf-8').strip()
+                except:
+                    self.last_rpc_error = str(e.stderr)
+            
             if self.verbose:
-                self.logger.error(f"CMD FAIL: {e}")
+                log_msg = self.last_rpc_error if self.last_rpc_error else str(e)
+                self.logger.error(f"CMD FAIL: {log_msg}")
             return None
+            
         except Exception as e:
+            self.last_rpc_error = str(e)
             self.logger.error(f"RPC Error ({method}): {e}")
             return None
 
@@ -332,12 +343,17 @@ class BitcoinAgent:
                 if tx_targets:
                     txid = self.rpc("sendmany", ["", json.dumps(tx_targets)])
                     
-                    # --- NEW FIX: Fallback Mining ---
                     if txid and isinstance(txid, str):
                         self.logger.info(f"Broadcasted TXID: {txid}")
                     else:
-                        # If sendmany returns None, it likely failed (insufficient funds?)
-                        self.logger.warning("Transaction failed (Insufficient Funds?). Mining 1 block to recover...")
+                        # --- UPDATED FAILURE HANDLING ---
+                        # If sendmany returns None, it failed. Check why.
+                        
+                        if self.last_rpc_error and "Unconfirmed UTXOs are available" in self.last_rpc_error:
+                             self.logger.info("Mempool chain limit detected (Unconfirmed UTXOs). Mining 1 block to clear...")
+                        else:
+                             self.logger.warning("Transaction failed (Insufficient Funds?). Mining 1 block to recover...")
+                        
                         mine_addr = self.get_my_shareable_address()
                         if mine_addr:
                             self.rpc("generatetoaddress", [1, mine_addr])
