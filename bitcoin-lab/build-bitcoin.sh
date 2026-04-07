@@ -18,7 +18,6 @@ cmake -B build -S .  -DWITH_QRENCODE=OFF -DBUILD_GUI=OFF \
 	-DCMAKE_EXE_LINKER_FLAGS="-s" \
 	-DCMAKE_CXX_FLAGS="-Os -ffunction-sections -fdata-sections -fvisibility=hidden" \
 	-DCMAKE_C_FLAGS="-Os -ffunction-sections -fdata-sections -fvisibility=hidden" 
-BUILD_JOBS="${BUILD_JOBS:-2}"
-cmake --build build -j "${BUILD_JOBS}" --target bitcoind bitcoin-cli
-install -m 755 build/src/bitcoind build/src/bitcoin-cli /usr/local/bin/
+cmake --build build -j "$(nproc)" && \
+cmake --install build
 cd / && rm -r /bitcoin 
