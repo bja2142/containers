@@ -61,6 +61,8 @@ RUN rm -rf ../rust/gbt/target ../rust/gbt/src ../rust/gbt/.git
 
 # --- B. BTC RPC Explorer ---
 RUN npm install --prefix /opt/btc-rpc-explorer -g btc-rpc-explorer
+RUN sed -i 's/} else if (global.activeBlockchain == "regtest") {/} else if (getblockchaininfo.blocks === 0 || global.activeBlockchain == "regtest") {/' /opt/btc-rpc-explorer/lib/node_modules/btc-rpc-explorer/routes/baseRouter.js \
+ && sed -i 's/} else if (global.activeBlockchain == "regtest") {/} else if (getblockchaininfo.blocks === 0 || global.activeBlockchain == "regtest") {/' /opt/btc-rpc-explorer/lib/node_modules/btc-rpc-explorer/routes/apiRouter.js
 
 
 # ==========================================

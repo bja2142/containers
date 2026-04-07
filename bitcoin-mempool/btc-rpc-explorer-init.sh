@@ -11,7 +11,7 @@ set -e
 # Network Binding
 export BTCEXP_HOST="${BTCEXP_HOST:-0.0.0.0}"
 export BTCEXP_PORT="${BTCEXP_PORT:-8081}"
-export BTCEXP_BASEURL="${BTCEXP_BASEURL:-/btc-explorer/}"
+export BTCEXP_BASEURL="${BTCEXP_BASEURL:-/labs/bitcoin/btc-explorer/}"
 
 # Bitcoin Core Connection
 export BTCEXP_BITCOIND_HOST="${BTCEXP_BITCOIND_HOST:-127.0.0.1}"

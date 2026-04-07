@@ -15,9 +15,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY patches/custom-genesis.patch /custom-genesis.patch
 COPY build-bitcoin.sh /build-bitcoin.sh
 
-# The script should now be able to clone via HTTPS
+# Build only the runtime binaries we actually use in the lab.
 RUN bash /build-bitcoin.sh && \
-    strip /usr/local/bin/bitcoin* /usr/local/bin/bitcoind
+    strip /usr/local/bin/bitcoin-cli /usr/local/bin/bitcoind
 
 RUN wget https://github.com/tsl0922/ttyd/releases/latest/download/ttyd.$(uname -m) -O /ttyd && chmod +x /ttyd
 
@@ -44,11 +44,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libcapnp-0.9.2 \
     python3 python3-venv python3-pip \
     tmux screen procps jq curl netcat-openbsd iproute2 nano \
-	vim-tiny less socat \
+	vim emacs less socat \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # 2. Copy the binaries from the builder
-COPY --from=builder /usr/local/bin/bitcoin* /usr/local/bin/
+COPY --from=builder /usr/local/bin/bitcoin-cli /usr/local/bin/
 COPY --from=builder /usr/local/bin/bitcoind /usr/local/bin/
 COPY --from=builder /ttyd /usr/local/bin/ttyd
 

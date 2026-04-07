@@ -9,3 +9,5 @@ exec /usr/local/bin/electrs \
   --cookie "${COOKIE}" \
   --http-addr 127.0.0.1:3000 \
   --lightmode
+
+  #  --electrum-rpc-addr 127.0.0.1:50001 \
