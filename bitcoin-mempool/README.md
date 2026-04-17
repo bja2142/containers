@@ -43,6 +43,7 @@ The UI will load once the backend, database, and electrs finish initializing.
 You can override defaults via environment variables:
 
 ```bash
+-e MEMPOOL_BASE_PATH=/
 -e MEMPOOL_NETWORK=mainnet
 -e CORE_RPC_HOST=127.0.0.1
 -e CORE_RPC_PORT=8332
@@ -60,9 +61,12 @@ Example:
 ```bash
 docker run \
   -p 8080:8080 \
+  -e MEMPOOL_BASE_PATH=/mempool \
   -e MEMPOOL_NETWORK=testnet \
   ghcr.io/YOURORG/bitcoin-core-mempool:latest
 ```
+
+`MEMPOOL_BASE_PATH` is optional. If it is unset, the UI is served from `/` as before. Set it to a path prefix such as `/mempool` when the container is published behind a reverse proxy path.
 
 ***
 
