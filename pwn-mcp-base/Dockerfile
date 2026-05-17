@@ -19,11 +19,6 @@ WORKDIR /app
 
 # Base OS, Python, QEMU, cross-compilers, debuggers, tracing, and exploit tools.
 RUN set -eux; \
-    seccomp_dev_package=libseccomp-dev; \
-    if [ "$(dpkg --print-architecture)" = "arm64" ]; then \
-        dpkg --add-architecture amd64; \
-        seccomp_dev_package=libseccomp-dev:amd64; \
-    fi; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
         python3 python3-dev python3-pip python3-venv python3-pexpect \
@@ -38,7 +33,7 @@ RUN set -eux; \
         libc6-dev-arm64-cross \
         libc6-dev-mipsel-cross \
         libc6-dev-riscv64-cross \
-        "${seccomp_dev_package}" \
+        libseccomp-dev \
         gdb-multiarch gdbserver \
         strace ltrace valgrind \
         libelf-dev libdw-dev pkg-config \

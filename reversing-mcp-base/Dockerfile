@@ -41,9 +41,10 @@ RUN set -eux; \
     sed -i "s|^JAVA_HOME_OVERRIDE=.*|JAVA_HOME_OVERRIDE=${JAVA_HOME}|" /opt/ghidra/support/launch.properties; \
     rm -f /tmp/ghidra.zip
 
-RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel \
+RUN python -m pip install --no-cache-dir --upgrade pip "setuptools<80" wheel \
     && python -m pip install --no-cache-dir --no-index -f /opt/ghidra/Ghidra/Features/PyGhidra/pypkg/dist pyghidra \
     && python -m pip install --no-cache-dir \
+        "setuptools<80" \
         "angr==9.2.115" \
         "cxxfilt>=0.3.0,<1" \
         "flare-floss>=3.1.1,<4" \
@@ -55,7 +56,7 @@ RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel \
         "yara-python>=4.5.0,<5" \
         "pytest>=8.2.0,<9"
 
-RUN python -c "import pyghidra, angr, yara; print('reversing base imports ok')" \
+RUN python -c "import pkg_resources, pyghidra, angr, yara; print('reversing base imports ok')" \
     && floss --version \
     && file --version \
     && java -version
