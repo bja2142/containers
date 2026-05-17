@@ -1,0 +1,114 @@
+name: Build and Push reversing-mcp Base
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-amd64:
+    name: Build (amd64)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Docker prune
+        run: docker system prune -af || true
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          install: true
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.CR_PAT }}
+
+      - name: Build & push (amd64)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./reversing-mcp-base
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/reversing-mcp-base:${{ github.sha }}-amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false
+
+  build-arm64:
+    name: Build (arm64)
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Docker prune
+        run: docker system prune -af || true
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          install: true
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.CR_PAT }}
+
+      - name: Build & push (arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./reversing-mcp-base
+          push: true
+          platforms: linux/arm64
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/reversing-mcp-base:${{ github.sha }}-arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false
+
+  publish-manifest:
+    name: Publish multi-arch manifest (latest + SHA)
+    needs: [build-amd64, build-arm64]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.CR_PAT }}
+
+      - name: Create multi-arch manifest :latest
+        run: |
+          OWNER_LC="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          IMAGE="ghcr.io/${OWNER_LC}/reversing-mcp-base"
+          docker buildx imagetools create \
+            --tag "${IMAGE}:latest" \
+            "${IMAGE}:${{ github.sha }}-amd64" \
+            "${IMAGE}:${{ github.sha }}-arm64"
+
+      - name: Create multi-arch manifest :${{ github.sha }}
+        run: |
+          OWNER_LC="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          IMAGE="ghcr.io/${OWNER_LC}/reversing-mcp-base"
+          docker buildx imagetools create \
+            --tag "${IMAGE}:${{ github.sha }}" \
+            "${IMAGE}:${{ github.sha }}-amd64" \
+            "${IMAGE}:${{ github.sha }}-arm64"
